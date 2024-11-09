@@ -25,6 +25,7 @@ folders = {
     "js": "js",
     "images": "images",
     "fonts": "fonts",
+    "cursors": "cursors",
     "other": "assets"
 }
 
@@ -45,21 +46,26 @@ def download_file(url, folder_name):
         print(Fore.RED + f"[ERROR] Failed to download {url}: {e}")
     return None
 
-def download_and_update_fonts(css_content, base_url):
-    font_extensions = (".woff", ".woff2", ".ttf", ".otf", ".eot", ".svg")
-    font_urls = set()
+def download_and_update_css_assets(css_content, base_url):
+    asset_extensions = (".woff", ".woff2", ".ttf", ".otf", ".eot", ".svg", ".cur", ".ani", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
     updated_css_content = css_content
     for line in css_content.splitlines():
         if "url(" in line:
             start = line.find("url(") + 4
             end = line.find(")", start)
-            font_url = line[start:end].strip('"').strip("'")
-            full_url = urljoin(base_url, font_url)
-            if full_url.endswith(font_extensions):
-                font_urls.add(full_url)
-                local_font_path = download_file(full_url, folders["fonts"])
-                if local_font_path:
-                    updated_css_content = updated_css_content.replace(font_url, os.path.relpath(local_font_path, os.path.join(output_dir, folders["css"])))
+            asset_url = line[start:end].strip('"').strip("'")
+            full_url = urljoin(base_url, asset_url)
+            if full_url.endswith(asset_extensions):
+                if full_url.endswith((".woff", ".woff2", ".ttf", ".otf", ".eot", ".svg")):
+                    folder_name = "fonts"
+                elif full_url.endswith((".cur", ".ani")):
+                    folder_name = "cursors"
+                else:
+                    folder_name = "images"
+                
+                local_asset_path = download_file(full_url, folders[folder_name])
+                if local_asset_path:
+                    updated_css_content = updated_css_content.replace(asset_url, os.path.relpath(local_asset_path, os.path.join(output_dir, folders["css"])))
     return updated_css_content
 
 def adjust_html_paths(soup, page_url):
@@ -75,7 +81,7 @@ def adjust_html_paths(soup, page_url):
                 full_css_url = urljoin(page_url, css_url)
                 css_response = requests.get(full_css_url)
                 if css_response.status_code == 200:
-                    updated_css_content = download_and_update_fonts(css_response.text, full_css_url)
+                    updated_css_content = download_and_update_css_assets(css_response.text, full_css_url)
                     local_css_path = os.path.join(output_dir, folders["css"], os.path.basename(urlparse(css_url).path))
                     with open(local_css_path, "w", encoding="utf-8") as css_file:
                         css_file.write(updated_css_content)
@@ -119,7 +125,7 @@ def clone_page(page_url):
         adjust_html_paths(soup, page_url)
 
         for style_tag in soup.find_all("style"):
-            updated_style_content = download_and_update_fonts(style_tag.text, page_url)
+            updated_style_content = download_and_update_css_assets(style_tag.text, page_url)
             style_tag.string = updated_style_content
 
         html_file = os.path.join(output_dir, "index.html")
